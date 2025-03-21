@@ -1,0 +1,7 @@
+2200 : Lỗi tải .env trong database.ts
+2222 : Kết nối MongoDB thành công
+20 : Lỗi khi kết nối MongoDB
+
+500 : Lỗi server
+400 : Thiếu thông tin gửi lên server
+201 : Thêm thành công user
