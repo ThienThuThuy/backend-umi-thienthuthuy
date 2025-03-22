@@ -1,0 +1,3 @@
+1. Giới hạn số request mỗi IP ( express-rate-limit )
+Ngăn spam từ một IP, cấu hình 50 request cho mỗi IP trong 15 phút, vượt quá sẽ bị ngăn lại!
+
