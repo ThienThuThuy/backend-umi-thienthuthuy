@@ -1,52 +1,80 @@
 import { connectDB } from "../config/database";
-import type { User } from "../models/userModel";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import { User, CreateUserResult } from "../models/userModel";
 
-let usersCollection: any;
-connectDB()
-    .then((db) => {
-        usersCollection = db.collection("users");
-    })
-    .catch((error) => {
-        console.error(error);
-    });
+class UserService {
+    private usersCollection: any;
 
-// Hàm xử lí đăng kí người dùng mới
-export const createUser = async (user: Omit<User, "_id">) => {
-    if (!usersCollection) return { success: false, message: "Chưa kết nối MongoDB!" };
+    constructor() {
+        this.init();
+    }
 
-    const existingUser = await usersCollection.findOne({ email: user.email });
-    if (existingUser) return { success: false, message: "Email đã tồn tại trong hệ thống!" };
+    private async init() {
+        try {
+            const db = await connectDB();
+            this.usersCollection = db.collection("users");
 
-    // Mã hóa mật khẩu trước khi lưu vào database
-    const hashedPassword = await bcrypt.hash(user.password, 10);
+            // Tạo unique index cho zaloId (chặn trùng)
+            await this.usersCollection.createIndex({ zaloId: 1 }, { unique: true });
+        } catch (error) {
+            console.error("Lỗi kết nối MongoDB hoặc tạo index:", error);
+        }
+    }
 
-    const result = await usersCollection.insertOne({
-        ...user,
-        password: hashedPassword, // Lưu mật khẩu đã mã hóa
-    });
+    /**
+     * Nếu zaloId đã có → trả về user đó.
+     * Nếu chưa có → tạo mới user và trả về.
+     */
+    public async findOrCreateZaloUser(user: Omit<User, "_id" | "password">): Promise<CreateUserResult> {
+        if (!this.usersCollection) {
+            return { success: false, message: "Chưa kết nối MongoDB!" };
+        }
 
-    if (!result.insertedId) return { success: false, message: "Lỗi khi chèn dữ liệu vào MongoDB!" };
+        const existingUser = await this.usersCollection.findOne({ zaloId: user.zaloId });
 
-    return { success: true, user: { _id: result.insertedId, ...user, password: undefined } };
-};
+        if (existingUser) {
+            return {
+                success: true,
+                user: {
+                    zaloId: existingUser.zaloId,
+                    name: existingUser.name,
+                    avatar: existingUser.avatar,
+                },
+            };
+        }
 
-// Hàm xử lí đăng nhập
-export const loginUser = async (email: string, password: string) => {
-    if (!usersCollection) return { success: false, message: "Chưa kết nối MongoDB!" };
-    const existingUser = await usersCollection.findOne({ email });
-    if (!existingUser) return { success: false, message: "Email hoặc mật khẩu không đúng!" };
+        try {
+            const result = await this.usersCollection.insertOne(user);
 
-    // So sánh mật khẩu nhập vào với mật khẩu đã mã hóa trong database
-    const isMatch = await bcrypt.compare(password, existingUser.password);
-    if (!isMatch) return { success: false, message: "Email hoặc mật khẩu không đúng!" };
+            if (!result.insertedId) {
+                return { success: false, message: "Không thể tạo người dùng mới!" };
+            }
 
-    // Tạo JWT Token
-    const token = jwt.sign(
-        { userId: existingUser._id, email: existingUser.email },
-        process.env.JWT_SECRET as string,
-        { expiresIn: "7d" }
-    );
-    return { success: true, message: "Đăng nhập thành công!", user: { ...existingUser, password: undefined } };
-};
+            return {
+                success: true,
+                user: {
+                    zaloId: user.zaloId,
+                    name: user.name,
+                    avatar: user.avatar,
+                },
+            };
+        } catch (error: any) {
+            if (error.code === 11000) {
+                // Trùng zaloId (race condition)
+                const duplicatedUser = await this.usersCollection.findOne({ zaloId: user.zaloId });
+                return {
+                    success: true,
+                    user: {
+                        zaloId: duplicatedUser.zaloId,
+                        name: duplicatedUser.name,
+                        avatar: duplicatedUser.avatar,
+                    },
+                };
+            }
+
+            console.error("Lỗi khi tạo user:", error);
+            return { success: false, message: "Lỗi không xác định khi tạo người dùng." };
+        }
+    }
+}
+
+export const userService = new UserService();

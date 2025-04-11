@@ -1,9 +1,19 @@
-import { ObjectId } from "mongodb";
-
+// File: src/models/userModel.ts
 export interface User {
-    _id?: ObjectId;
+    zaloId: string;
     name: string;
-    email: string;
-    password: string;
-    balance: number;
+    avatar?: string;
 }
+
+export interface CreateUserResult {
+    success: boolean;
+    message?: string;
+    user?: Omit<User, "password">;
+}
+
+export interface LoginUserResult {
+    success: boolean;
+    message: string;
+    user?: Omit<User, "password">;
+}
+

@@ -21,10 +21,12 @@ const client = new MongoClient(uri, {
 export async function connectDB() {
     try {
         await client.connect();
-        return client.db();
+        return client.db("ZaloMiniApp");
+
     } catch (error) {
         console.error("❌ Database connection error:", error);
         process.exit(1);
     }
 }
+
 export { client };
